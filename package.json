@@ -1,0 +1,67 @@
+{
+  "name": "dsh-archived-sessions",
+  "version": "0.1.0",
+  "description": "Pluggable archived-session management and restore UI for DeepSeek Harness Web",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "sessions",
+    "archive"
+  ],
+  "license": "MIT",
+  "author": "ww2186874-cyber",
+  "packageManager": "pnpm@11.22.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ww2186874-cyber/dsh-archived-sessions.git"
+  },
+  "homepage": "https://github.com/ww2186874-cyber/dsh-archived-sessions#readme",
+  "bugs": {
+    "url": "https://github.com/ww2186874-cyber/dsh-archived-sessions/issues"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "scripts/check-runtime-contract.js",
+    "cordis.patch.yml",
+    "README.md",
+    "COMPATIBILITY.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "bundle": "node scripts/build-client.js",
+    "bundle:check": "node scripts/check-client.js",
+    "check": "node --check lib/index.js && node --check src/client-module.js && node --check lib/client.js && node --check scripts/build-client.js && node --check scripts/check-client.js && node --check scripts/check-runtime-contract.js",
+    "verify": "pnpm run bundle:check && pnpm run check && pnpm run test",
+    "verify:runtime": "node scripts/check-runtime-contract.js",
+    "prepack": "pnpm run verify"
+  },
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": "0.1.1-rc.2"
+  }
+}

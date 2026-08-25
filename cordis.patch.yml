@@ -1,0 +1,4 @@
+# Archived-session manager Host adapter and browser UI.
+- insert:
+    - id: archived-sessions
+      name: 'dsh-archived-sessions'
