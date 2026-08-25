@@ -29,7 +29,7 @@ async function runtimeRoot() {
   return candidates[0]
 }
 
-async function packageRoot(runtime, name) {
+async function packageRoots(runtime, name) {
   const pnpm = join(runtime, 'node_modules', '.pnpm')
   const entries = (await readdir(pnpm, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
@@ -45,7 +45,11 @@ async function packageRoot(runtime, name) {
     byVersion.set(manifest.version, list)
   }
   if (byVersion.size !== 1) throw new Error(`runtime contains multiple ${name} versions: ${[...byVersion.keys()].join(', ')}`)
-  return existing.sort()[0]
+  const [version] = byVersion.keys()
+  if (version !== EXPECTED_DSH_VERSION) {
+    throw new Error(`runtime package ${name} is ${String(version)}; expected ${EXPECTED_DSH_VERSION}`)
+  }
+  return existing.sort()
 }
 
 async function allTypeText(path) {
@@ -72,27 +76,43 @@ if (dshVersion !== EXPECTED_DSH_VERSION) {
   throw new Error(`this release validates DSH ${EXPECTED_DSH_VERSION}; runtime declares ${String(dshVersion)}`)
 }
 
-const workspacePath = await packageRoot(runtime, '@deepseek-ai/dsh-workspace')
-const workspaceManifest = JSON.parse(await readFile(join(workspacePath, 'package.json'), 'utf8'))
-if (workspaceManifest.version !== EXPECTED_DSH_VERSION) {
-  throw new Error(`workspace package is ${workspaceManifest.version}; expected ${EXPECTED_DSH_VERSION}`)
-}
-const workspaceModule = await import(pathToFileURL(join(workspacePath, 'lib', 'index.js')).href)
-const registryProbe = Object.create(workspaceModule.WorkspaceRegistry.prototype)
-if (!matchesRc2CompatibilityRegistry(registryProbe)) {
-  throw new Error('workspaceRegistry private method fingerprints do not match the audited rc.2 adapter')
+const workspacePaths = await packageRoots(runtime, '@deepseek-ai/dsh-workspace')
+for (const workspacePath of workspacePaths) {
+  const workspaceModule = await import(pathToFileURL(join(workspacePath, 'lib', 'index.js')).href)
+  const registryProbe = Object.create(workspaceModule.WorkspaceRegistry.prototype)
+  if (!matchesRc2CompatibilityRegistry(registryProbe)) {
+    throw new Error(`workspaceRegistry private method fingerprints do not match the audited rc.2 adapter: ${workspacePath}`)
+  }
 }
 
-const settingsText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-client-ui-settings'))
-const layoutText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-client-ui-layout'))
-const queryText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-session-query'))
-const webServerText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-host-webserver'))
-requireText(settingsText, "'settings.section'", 'settings Slot')
-requireText(settingsText, 'SettingsSectionOwnerProps', 'settings owner props')
-requireText(layoutText, "'shell.overlay'", 'layout Slot')
-requireText(queryText, 'readTitleSnapshots(', 'sessionQuery')
-requireText(webServerText, 'register(route: WebRoute)', 'webServer')
+const settingsPaths = await packageRoots(runtime, '@deepseek-ai/dsh-client-ui-settings')
+const clientRuntimePaths = await packageRoots(runtime, '@deepseek-ai/dsh-client-runtime')
+const queryPaths = await packageRoots(runtime, '@deepseek-ai/dsh-session-query')
+const webServerPaths = await packageRoots(runtime, '@deepseek-ai/dsh-host-webserver')
+for (const path of settingsPaths) {
+  const text = await allTypeText(path)
+  requireText(text, "'settings.section'", `settings Slot (${path})`)
+  requireText(text, 'SettingsSectionOwnerProps', `settings owner props (${path})`)
+}
+for (const path of clientRuntimePaths) {
+  const text = await allTypeText(path)
+  requireText(text, 'interface GlobalStandardProps', `global Slot props (${path})`)
+  requireText(text, 'useWorkspaces: SnapshotSelectorHook<', `useWorkspaces Slot prop (${path})`)
+  requireText(text, 'archivedSessionIds: readonly SessionId[]', `archive list state (${path})`)
+}
+for (const path of queryPaths) {
+  const text = await allTypeText(path)
+  requireText(text, 'readTitleSnapshots(', `sessionQuery (${path})`)
+  requireText(text, "status: 'fulfilled'", `sessionQuery title result (${path})`)
+  requireText(text, 'value: SessionTitleObservation', `sessionQuery title observation (${path})`)
+}
+for (const path of webServerPaths) {
+  const text = await allTypeText(path)
+  requireText(text, 'register(route: WebRoute): () => void', `webServer disposer (${path})`)
+  requireText(text, 'kind: WebRouteKind', `WebRoute kind (${path})`)
+  requireText(text, 'handler: (req: IncomingMessage, res: ServerResponse)', `WebRoute handler (${path})`)
+}
 
 console.log(`runtime contract verified: DSH ${dshVersion}`)
-console.log(`workspaceRegistry rc.2 fingerprint verified: ${workspacePath}`)
+console.log(`workspaceRegistry rc.2 fingerprints verified: ${workspacePaths.join(', ')}`)
 console.log(`public Slot/service contracts verified for ${root}`)

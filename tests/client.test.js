@@ -39,33 +39,84 @@ test('generated client bundle exactly matches source', () => {
   assert.equal(typeof evaluateBundle().normalizeArchiveData, 'function')
 })
 
-test('page store emits only on real transitions and restores opener focus', () => {
-  const store = client.createPageStore()
-  let changes = 0
-  let focusCalls = 0
-  const opener = { isConnected: true, focus() { focusCalls += 1 } }
-  const dispose = store.subscribe(() => { changes += 1 })
-  assert.equal(store.getSnapshot(), false)
-  store.close()
-  store.open(opener)
-  store.open(opener)
-  assert.equal(store.getSnapshot(), true)
-  store.close()
-  assert.equal(store.getSnapshot(), false)
-  assert.equal(changes, 2)
-  assert.equal(focusCalls, 1)
-  dispose()
-})
-
-test('settings page stays minimal and its manager button uses theme-aware contrast', () => {
+test('settings page renders the archive manager directly without a secondary entry point', () => {
   for (const removed of [
     '集中查看和恢复被归档的会话',
     '管理页面使用 DSH 的公开 Slot',
     '兼容策略',
     '当前有 ${archivedCount} 个已归档会话',
+    '打开归档管理',
+    'shell.overlay',
+    'ArchivePage',
+    'pageStore',
   ]) assert.equal(source.includes(removed), false)
-  assert.equal(source.includes("className: 'dsh-archive-settings__open'"), true)
-  assert.match(source, /\.dsh-archive-settings__open\{[^}]*background:var\(--dsw-alias-brand-primary\);color:var\(--dsw-alias-bg-base\)/)
+  assert.equal(source.includes('function ArchiveSettingsSection({ useWorkspaces })'), true)
+  assert.equal(source.includes("className: 'dsh-archive-list'"), true)
+  assert.equal(source.includes("className: 'dsh-archive-settings__refresh'"), true)
+  assert.match(source, /\.dsh-archive-row__restore\{[^}]*background:var\(--dsw-alias-brand-primary\);color:var\(--dsw-alias-bg-base\)/)
+})
+
+test('archive request gate serializes list reads and restores with one deferred refresh', () => {
+  const gate = client.createArchiveRequestGate()
+  const firstLoad = gate.beginLoad()
+  assert.notEqual(firstLoad, null)
+  assert.equal(gate.beginRestore(), null)
+  assert.equal(gate.beginLoad(), null)
+  assert.equal(gate.endLoad(firstLoad), true)
+
+  const secondLoad = gate.beginLoad()
+  assert.notEqual(secondLoad, null)
+  assert.equal(gate.endLoad(secondLoad), false)
+
+  const restore = gate.beginRestore()
+  assert.notEqual(restore, null)
+  assert.equal(gate.beginRestore(), null)
+  assert.equal(gate.beginLoad(), null)
+  assert.equal(gate.beginLoad(), null)
+  assert.equal(gate.endRestore(restore), true)
+})
+
+test('archive request gate ignores stale finalizers after cancel and reacquire', () => {
+  const gate = client.createArchiveRequestGate()
+  const staleLoad = gate.beginLoad()
+  gate.cancel()
+  const currentLoad = gate.beginLoad()
+  assert.notEqual(currentLoad, null)
+  assert.equal(gate.endLoad(staleLoad), false)
+  assert.equal(gate.beginRestore(), null)
+  assert.equal(gate.endLoad(currentLoad), false)
+
+  const staleRestore = gate.beginRestore()
+  gate.cancel()
+  const currentRestore = gate.beginRestore()
+  assert.notEqual(currentRestore, null)
+  assert.equal(gate.endRestore(staleRestore), false)
+  assert.equal(gate.beginLoad(), null)
+  assert.equal(gate.endRestore(currentRestore), true)
+})
+
+test('restore notices only report the authoritative archive-set transition', () => {
+  assert.equal(client.restoreNotice({ title: '可用会话', available: true }, true), '“可用会话”已从归档集合移除，请在侧栏确认会话状态。')
+  assert.equal(client.restoreNotice({ title: '缺失日志', available: false }, true), '“缺失日志”已从归档集合移除，请在侧栏确认会话状态。')
+  assert.equal(client.restoreNotice({ title: '任意', available: true }, false), '该会话已经不在归档集合中。')
+})
+
+test('archive rows disable restore while list data is loading', () => {
+  const react = {
+    Fragment: Symbol('Fragment'),
+    createElement(type, props, ...children) { return { type, props: props ?? {}, children } },
+  }
+  const module = evaluateSource(react)
+  const common = {
+    session: { id: 's1', title: 'Session', cwd: null, createdAt: null, agentPreset: null, workspaceTitle: null, available: true },
+    capability: { canRestore: true, message: '' },
+    busySessionId: null,
+    onRestore() {},
+  }
+  const loadingRow = module.ArchiveRow({ ...common, listLoading: true })
+  const readyRow = module.ArchiveRow({ ...common, listLoading: false })
+  assert.equal(loadingRow.children[2].props.disabled, true)
+  assert.equal(readyRow.children[2].props.disabled, false)
 })
 
 test('archive data decoder owns only expected scalar fields', () => {
@@ -101,7 +152,7 @@ test('list request uses same-origin no-store GET', async () => {
   assert.deepEqual(data.sessions, [])
 })
 
-test('persistent client apply lifecycle-owns styles and registers only additive public Slots', () => {
+test('persistent client lifecycle-owns styles and registers only the settings page', () => {
   const registrations = []
   const effects = []
   const tags = []
@@ -119,7 +170,7 @@ test('persistent client apply lifecycle-owns styles and registers only additive 
     },
     slots: {
       inject(key, callback) {
-        assert.ok(['settings.section', 'shell.overlay'].includes(key))
+        assert.equal(key, 'settings.section')
         callback()
       },
       register(options, component) {
@@ -131,14 +182,13 @@ test('persistent client apply lifecycle-owns styles and registers only additive 
   module.apply(ctx)
   assert.deepEqual(registrations.map(({ options }) => [options.name, options.id]), [
     ['settings.section', 'archived-sessions'],
-    ['shell.overlay', 'archived-sessions-page'],
   ])
   assert.equal(source.includes('sidebar.footer.action'), false)
+  assert.equal(source.includes('shell.overlay'), false)
   assert.equal(tags.length, 1)
   assert.equal(tags[0].dataset.plugin, 'dsh-archived-sessions')
-  assert.equal(tags[0].textContent.includes('.dsh-archive-page'), true)
+  assert.equal(tags[0].textContent.includes('.dsh-archive-settings'), true)
   assert.deepEqual(effects.map((entry) => entry.label), [
-    'archived-sessions: page state',
     'archived-sessions: styles',
   ])
   for (const effect of effects.reverse()) effect.dispose()

@@ -7,7 +7,7 @@ The plugin intentionally depends on additive, published DSH extension surfaces:
 - Profile Bundle metadata (`dsh.bundle`, `dsh.client`);
 - Cordis lifecycle and `ctx.effect()`;
 - Host services `workspaceRegistry`, `sessionQuery`, and `webServer`;
-- Client slots `settings.section` and `shell.overlay`;
+- Client slot `settings.section`;
 - root standard prop `useWorkspaces` supplied by the Slot renderer.
 
 It does not edit the DSH Runtime checkout, replace `root`, `sidebar`, `conversation`, or `details`, inspect product DOM nodes, claim the SPA fallback route, or patch browser history.
