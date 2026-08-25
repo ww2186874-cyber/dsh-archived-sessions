@@ -1,6 +1,6 @@
 {
   "name": "dsh-archived-sessions",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pluggable archived-session management and restore UI for DeepSeek Harness Web",
   "keywords": [
     "deepseek-harness",
@@ -46,8 +46,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-settings"
       ]
     }
   },

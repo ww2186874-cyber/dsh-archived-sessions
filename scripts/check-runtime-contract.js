@@ -84,13 +84,11 @@ if (!matchesRc2CompatibilityRegistry(registryProbe)) {
 }
 
 const settingsText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-client-ui-settings'))
-const sidebarText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-client-ui-sidebar'))
 const layoutText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-client-ui-layout'))
 const queryText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-session-query'))
 const webServerText = await allTypeText(await packageRoot(runtime, '@deepseek-ai/dsh-host-webserver'))
 requireText(settingsText, "'settings.section'", 'settings Slot')
 requireText(settingsText, 'SettingsSectionOwnerProps', 'settings owner props')
-requireText(sidebarText, "'sidebar.footer.action'", 'sidebar Slot')
 requireText(layoutText, "'shell.overlay'", 'layout Slot')
 requireText(queryText, 'readTitleSnapshots(', 'sessionQuery')
 requireText(webServerText, 'register(route: WebRoute)', 'webServer')

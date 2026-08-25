@@ -108,7 +108,7 @@ test('persistent client apply lifecycle-owns styles and registers only additive 
     },
     slots: {
       inject(key, callback) {
-        assert.ok(['sidebar.footer.action', 'settings.section', 'shell.overlay'].includes(key))
+        assert.ok(['settings.section', 'shell.overlay'].includes(key))
         callback()
       },
       register(options, component) {
@@ -119,10 +119,10 @@ test('persistent client apply lifecycle-owns styles and registers only additive 
   }
   module.apply(ctx)
   assert.deepEqual(registrations.map(({ options }) => [options.name, options.id]), [
-    ['sidebar.footer.action', 'archived-sessions'],
     ['settings.section', 'archived-sessions'],
     ['shell.overlay', 'archived-sessions-page'],
   ])
+  assert.equal(source.includes('sidebar.footer.action'), false)
   assert.equal(tags.length, 1)
   assert.equal(tags[0].dataset.plugin, 'dsh-archived-sessions')
   assert.equal(tags[0].textContent.includes('.dsh-archive-page'), true)
