@@ -57,6 +57,17 @@ test('page store emits only on real transitions and restores opener focus', () =
   dispose()
 })
 
+test('settings page stays minimal and its manager button uses theme-aware contrast', () => {
+  for (const removed of [
+    '集中查看和恢复被归档的会话',
+    '管理页面使用 DSH 的公开 Slot',
+    '兼容策略',
+    '当前有 ${archivedCount} 个已归档会话',
+  ]) assert.equal(source.includes(removed), false)
+  assert.equal(source.includes("className: 'dsh-archive-settings__open'"), true)
+  assert.match(source, /\.dsh-archive-settings__open\{[^}]*background:var\(--dsw-alias-brand-primary\);color:var\(--dsw-alias-bg-base\)/)
+})
+
 test('archive data decoder owns only expected scalar fields', () => {
   const decoded = client.normalizeArchiveData({
     archivedCount: 1,
