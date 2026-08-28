@@ -53,7 +53,7 @@ test('settings page renders the archive manager directly without a secondary ent
   assert.equal(source.includes('function ArchiveSettingsSection({ useWorkspaces })'), true)
   assert.equal(source.includes("className: 'dsh-archive-list'"), true)
   assert.equal(source.includes("className: 'dsh-archive-settings__refresh'"), true)
-  assert.match(source, /\.dsh-archive-row__restore\{[^}]*background:var\(--dsw-alias-brand-primary\);color:var\(--dsw-alias-bg-base\)/)
+  assert.match(source, /\.dsh-archive-settings__refresh,\.dsh-archive-row__restore\{[^}]*background:var\(--dsw-alias-brand-primary\);color:var\(--dsw-alias-bg-base\)/)
 })
 
 test('archive request gate serializes list reads and restores with one deferred refresh', () => {
