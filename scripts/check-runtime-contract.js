@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto'
 import { access, readdir, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { matchesRc2CompatibilityRegistry } from '../lib/index.js'
+import { matchesAlpha2CompatibilityRegistry } from '../lib/index.js'
 
-const EXPECTED_DSH_VERSION = '0.1.1-rc.2'
+const EXPECTED_DSH_VERSION = '0.1.2-alpha.2'
+const EXPECTED_WORKSPACE_BUNDLE_SHA256 = 'eea81b03fd61039725adff9255f8a86055c449075ce8a62c8a3f3fd0b041b4a5'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 async function exists(path) {
@@ -78,15 +80,22 @@ if (dshVersion !== EXPECTED_DSH_VERSION) {
 
 const workspacePaths = await packageRoots(runtime, '@deepseek-ai/dsh-workspace')
 for (const workspacePath of workspacePaths) {
-  const workspaceModule = await import(pathToFileURL(join(workspacePath, 'lib', 'index.js')).href)
+  const workspaceEntryPath = join(workspacePath, 'lib', 'index.js')
+  const workspaceEntry = await readFile(workspaceEntryPath)
+  const workspaceEntryHash = createHash('sha256').update(workspaceEntry).digest('hex')
+  if (workspaceEntryHash !== EXPECTED_WORKSPACE_BUNDLE_SHA256) {
+    throw new Error(`workspace package bytes do not match the audited DSH ${EXPECTED_DSH_VERSION} release: ${workspacePath}`)
+  }
+  const workspaceModule = await import(pathToFileURL(workspaceEntryPath).href)
   const registryProbe = Object.create(workspaceModule.WorkspaceRegistry.prototype)
-  if (!matchesRc2CompatibilityRegistry(registryProbe)) {
-    throw new Error(`workspaceRegistry private method fingerprints do not match the audited rc.2 adapter: ${workspacePath}`)
+  if (!matchesAlpha2CompatibilityRegistry(registryProbe)) {
+    throw new Error(`workspaceRegistry private method fingerprints do not match the audited alpha.2 adapter: ${workspacePath}`)
   }
 }
 
 const settingsPaths = await packageRoots(runtime, '@deepseek-ai/dsh-client-ui-settings')
-const clientRuntimePaths = await packageRoots(runtime, '@deepseek-ai/dsh-client-runtime')
+const workspaceClientPaths = await packageRoots(runtime, '@deepseek-ai/dsh-client-ui-workspace')
+const workspaceApiPaths = await packageRoots(runtime, '@deepseek-ai/dsh-api-workspace-controller')
 const queryPaths = await packageRoots(runtime, '@deepseek-ai/dsh-session-query')
 const webServerPaths = await packageRoots(runtime, '@deepseek-ai/dsh-host-webserver')
 for (const path of settingsPaths) {
@@ -94,11 +103,15 @@ for (const path of settingsPaths) {
   requireText(text, "'settings.section'", `settings Slot (${path})`)
   requireText(text, 'SettingsSectionOwnerProps', `settings owner props (${path})`)
 }
-for (const path of clientRuntimePaths) {
+for (const path of workspaceClientPaths) {
   const text = await allTypeText(path)
   requireText(text, 'interface GlobalStandardProps', `global Slot props (${path})`)
-  requireText(text, 'useWorkspaces: SnapshotSelectorHook<', `useWorkspaces Slot prop (${path})`)
-  requireText(text, 'archivedSessionIds: readonly SessionId[]', `archive list state (${path})`)
+  requireText(text, 'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>', `useWorkspaces Slot prop (${path})`)
+}
+for (const path of workspaceApiPaths) {
+  const text = await allTypeText(path)
+  requireText(text, 'export interface WorkspaceSnapshot', `workspace client snapshot (${path})`)
+  requireText(text, "readonly archivedSessionIds: WorkspaceArchiveValue['archivedSessionIds']", `archive list state (${path})`)
 }
 for (const path of queryPaths) {
   const text = await allTypeText(path)
@@ -109,10 +122,11 @@ for (const path of queryPaths) {
 for (const path of webServerPaths) {
   const text = await allTypeText(path)
   requireText(text, 'register(route: WebRoute): () => void', `webServer disposer (${path})`)
+  requireText(text, "export type WebRouteKind = 'exact' | 'prefix'", `exact WebRoute kind (${path})`)
   requireText(text, 'kind: WebRouteKind', `WebRoute kind (${path})`)
   requireText(text, 'handler: (req: IncomingMessage, res: ServerResponse)', `WebRoute handler (${path})`)
 }
 
 console.log(`runtime contract verified: DSH ${dshVersion}`)
-console.log(`workspaceRegistry rc.2 fingerprints verified: ${workspacePaths.join(', ')}`)
+console.log(`workspaceRegistry alpha.2 package bytes and method fingerprints verified: ${workspacePaths.join(', ')}`)
 console.log(`public Slot/service contracts verified for ${root}`)

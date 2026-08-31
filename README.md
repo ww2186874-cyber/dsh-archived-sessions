@@ -4,7 +4,7 @@
 
 ## 兼容性
 
-- DSH：当前包的 `engines.dsh` **仅声明支持 `0.1.1-rc.2`**；
+- DSH：当前包的 `engines.dsh` **仅声明支持 `0.1.2-alpha.2`**；
 - Node.js：`>=22.19.0`；
 - 包管理器：仓库使用 pnpm，锁定的开发版本见 `package.json` 的 `packageManager` 字段。
 
@@ -17,7 +17,7 @@
 - 在摘要可用时显示标题、所属工作区、创建时间、Agent Preset 和工作路径；
 - 会话日志暂时不可读取时仍保留该条目，并明确标记日志不可用；
 - 支持刷新、恢复、空状态、加载状态、错误状态和兼容性安全降级；
-- rc.2 兼容路径只改变归档集合；native 路径调用宿主提供的 `unarchiveSession()`，并验证目标 ID 已移出归档集合；插件自身不复制、改写或删除会话日志，也不提供永久删除功能。
+- alpha.2 兼容路径只改变归档集合；native 路径调用宿主提供的 `unarchiveSession()`，并验证目标 ID 已移出归档集合；插件自身不复制、改写或删除会话日志，也不提供永久删除功能。
 
 ## 界面与数据集成
 
@@ -27,13 +27,13 @@ Host 端通过 `workspaceRegistry` 读取归档集合和工作区归属，通过
 
 ## 恢复兼容策略
 
-受支持的 DSH `0.1.1-rc.2` 的 `WorkspaceRegistry` 实现包含 `archiveSession()`，并持久化 `archivedSessionIds`，但没有 `unarchiveSession()`。其中恢复 fallback 依赖下述私有实现指纹，不应把这些实现细节当作稳定公开 API。插件按以下顺序选择恢复路径：
+受支持的 DSH `0.1.2-alpha.2` 的 `WorkspaceRegistry` 实现包含 `archiveSession()`，并持久化 `archivedSessionIds`，但没有 `unarchiveSession()`。其中恢复 fallback 依赖下述私有实现指纹，不应把这些实现细节当作稳定公开 API。插件按以下顺序选择恢复路径：
 
 1. 若运行时对象提供可调用的 `workspaceRegistry.unarchiveSession()`，代码会优先使用该宿主方法，并在调用后重新核对权威归档集合；这不等于自动声明该 DSH 版本受支持，扩大版本范围仍需单独审查和发布；
-2. 否则，只有归档 ID 唯一、状态结构符合预期，且 `archiveSession`、`setState`、`enqueueOperation`、`recoverPendingMutation` 四个方法的 SHA-256 实现指纹全部精确匹配已审计的 rc.2 版本时，才启用兼容适配器；
+2. 否则，只有归档 ID 唯一、状态结构符合预期，且 `archiveSession`、`setState`、`enqueueOperation`、`recoverPendingMutation` 四个原型自有方法的 SHA-256 实现指纹全部精确匹配已审计的 alpha.2 版本时，才启用兼容适配器；
 3. 任一结构、唯一性或指纹检查失败时，恢复功能会安全禁用并显示原因，不会猜测或写入未知状态。
 
-兼容适配器与 DSH 自身的工作区写操作共用串行队列；进入队列后会再次检查指纹和状态一致性。写入时只从 `archivedSessionIds` 移除一个目标 ID，并保留其他所有状态字段。恢复后还会再次确认目标 ID 已不在权威归档集合中。原工作区位置由 DSH rc.2 保留的会话归属关系决定。详见 [COMPATIBILITY.md](COMPATIBILITY.md)。
+兼容适配器与 DSH 自身的工作区写操作共用串行队列；进入队列后会再次检查指纹、未完成持久化标记和状态一致性。写入时只从 `archivedSessionIds` 移除一个目标 ID，并保留其他所有状态字段。恢复后还会再次确认目标 ID 已不在权威归档集合中。原工作区位置由 DSH alpha.2 保留的会话归属关系决定。`verify:runtime` 还会核对精确包版本和完整 `dsh-workspace/lib/index.js` 文件哈希。详见 [COMPATIBILITY.md](COMPATIBILITY.md)。
 
 ## 安装到 Web Profile
 
@@ -44,25 +44,25 @@ Host 端通过 `workspaceRegistry` 读取归档集合和工作区归属，通过
 Windows 上可将非官方插件源码放在独立目录，例如：
 
 ```text
-C:\dsh-plugins\dsh-archived-sessions
+C:\dsh-plugins-alpha2\dsh-archived-sessions
 ```
 
-克隆后，在插件源码目录执行：
+确认源码和验证结果可信后，使用 alpha.2 Runtime 的 CLI 安装本地链接：
 
 ```powershell
-git clone https://github.com/ww2186874-cyber/dsh-archived-sessions.git C:\dsh-plugins\dsh-archived-sessions
-Set-Location C:\dsh-plugins\dsh-archived-sessions
-dsh plugin --profile web add .
+$env:DSH_HOME = 'C:\Users\12187\.dsh-alpha2'
+& 'C:\Users\12187\AppData\Local\dsh-runtime\alpha2\node_modules\.bin\dsh.cmd' `
+  plugin --profile web add 'link:C:/dsh-plugins-alpha2/dsh-archived-sessions'
 ```
 
-`dsh plugin` 会把参数转交给 Profile 目录中的 pnpm，并在安装后根据包的 `dsh.bundle` 声明对账 `dsh.profile.bundles`。运行该命令前，`dsh` 和 `pnpm` 都需要位于 `PATH`。
+`dsh plugin` 会把参数转交给 Profile 目录中的 pnpm，并在安装后根据包的 `dsh.bundle` 声明对账 `dsh.profile.bundles`。必须同时固定 `DSH_HOME` 和 alpha.2 Runtime 的 CLI 路径，避免误装进其他并行 Profile。
 
-如需手工配置，请把以下字段**合并**进 `%DSH_HOME%\profiles\web\package.json`，不要覆盖 Profile 中已有的依赖或 Bundle：
+安装后，`C:\Users\12187\.dsh-alpha2\profiles\web\package.json` 中应出现以下两个条目；这用于核验，不建议绕过 `dsh plugin` 手工维护：
 
 ```json
 {
   "dependencies": {
-    "dsh-archived-sessions": "link:C:/dsh-plugins/dsh-archived-sessions"
+    "dsh-archived-sessions": "link:C:/dsh-plugins-alpha2/dsh-archived-sessions"
   },
   "dsh": {
     "profile": {
@@ -74,36 +74,19 @@ dsh plugin --profile web add .
 }
 ```
 
-然后执行：
+### GitHub 安装状态
 
-```powershell
-Set-Location "$env:DSH_HOME\profiles\web"
-pnpm install
-```
-
-### 从 GitHub 安装
-
-本机 Git 必须能够访问目标仓库；公开仓库通常不需要凭据，私有仓库需要相应权限。为了可复现安装，正式环境建议把 `<ref>` 换成已审查的 tag 或完整 commit；跟踪开发分支时可使用 `main`。
-
-```powershell
-dsh plugin --profile web add "github:ww2186874-cyber/dsh-archived-sessions#<ref>"
-```
+当前 alpha.2 适配修改只存在于这个独立本地工作区；在相应提交或 tag 发布到远端前，不要从 GitHub 的 `main` 分支安装来替代本地链接，因为远端版本可能仍面向旧 DSH。
 
 ### 更新
 
-GitHub 依赖可通过 Profile 插件命令更新：
+本地 `link:` 安装不会自动拉取源码。更新前应先审查目标提交；更新后重新执行：
 
 ```powershell
-dsh plugin --profile web update dsh-archived-sessions
-```
-
-本地 `link:` 安装不会通过上述命令拉取源码；应在独立源码仓库中自行获取更新，并在信任新提交后执行验证：
-
-```powershell
-Set-Location C:\dsh-plugins\dsh-archived-sessions
-git pull --ff-only
+Set-Location C:\dsh-plugins-alpha2\dsh-archived-sessions
 pnpm install --frozen-lockfile
 pnpm verify
+pnpm verify:runtime -- 'C:\Users\12187\AppData\Local\dsh-runtime\alpha2'
 pnpm pack --dry-run
 ```
 
@@ -126,7 +109,9 @@ pnpm pack --dry-run
 推荐使用：
 
 ```powershell
-dsh plugin --profile web remove dsh-archived-sessions
+$env:DSH_HOME = 'C:\Users\12187\.dsh-alpha2'
+& 'C:\Users\12187\AppData\Local\dsh-runtime\alpha2\node_modules\.bin\dsh.cmd' `
+  plugin --profile web remove dsh-archived-sessions
 ```
 
 如果手工卸载，则从 Web Profile `package.json` 的 `dependencies` 和 `dsh.profile.bundles` 中移除 `dsh-archived-sessions`，再在 Profile 根目录运行 `pnpm install`。之后由用户自行重启 DSH Web Profile。
@@ -158,7 +143,7 @@ pnpm pack --dry-run
 
 ## 升级检查
 
-每次升级 DSH 后，先找到新的实际 Runtime checkout，再执行：
+每次升级 DSH 后，先找到新的实际 Runtime 根目录，再执行：
 
 ```powershell
 pnpm verify
@@ -166,7 +151,7 @@ pnpm verify:runtime -- "C:\path\to\new-dsh-runtime-root"
 pnpm pack --dry-run
 ```
 
-`verify:runtime` 会核对声明的 DSH 版本、rc.2 适配器方法指纹，以及 Settings、Session Query、Client Runtime、Web Server 的类型契约。检查失败时不得绕过或放宽指纹；应先审查新版本实现并发布插件更新。即使自动检查通过，也必须完成 GUI 验证：
+`verify:runtime` 会核对声明的 DSH 版本、alpha.2 Workspace 包完整文件哈希与适配器方法指纹，以及 Settings、Workspace Client、Session Query、Web Server 的类型契约。检查失败时不得绕过或放宽指纹；应先审查新版本实现并发布插件更新。即使自动检查通过，也必须完成 GUI 验证：
 
 1. 设置页入口可见，且侧栏没有新增插件入口；
 2. “已归档会话”页直接显示列表，刷新可用；
@@ -178,14 +163,14 @@ pnpm pack --dry-run
 
 当前仓库的运行时代码具有以下边界：
 
-- 没有第三方 `dependencies` 或 `devDependencies`，锁文件也没有解析外部包；Client 通过 DSH 客户端模块加载器取得共享的 React，而 `dsh.client.inject` 声明注入 Client Runtime 与 Settings 服务；
+- 没有第三方 `dependencies` 或 `devDependencies`，锁文件也没有解析外部包；Client 通过 DSH 客户端模块加载器取得共享的 React，`dsh.client.inject` 仅声明 Settings 与 Workspace Client 模块的加载/到达依赖，实际 Slot 可用性仍由 `slots.inject()` 等待；
 - 没有 `preinstall`、`install`、`postinstall` 或 `prepare` 生命周期脚本；
 - 不执行 shell 命令，不读取凭据，不使用遥测，也不向外部主机发起运行时网络请求；Client 只请求同源的两个插件 API；
 - HTTP API 只接受 `socket.remoteAddress` 为 loopback、`Host` 请求头中的 authority 也是 loopback，且不带转发头的直接请求；
 - 带有 `Sec-Fetch-Site: cross-site` 或不匹配 `Origin` 的请求会被拒绝；恢复 POST 还必须带有与当前 Host 精确匹配的 `Origin` 和 `Sec-Fetch-Site: same-origin`；
 - 恢复 POST 只接受 JSON，请求体上限为 8192 字节；响应禁止缓存并带有 `nosniff`；
 - 意外的 Host 内部错误会在返回浏览器前隐藏具体异常内容，但完整错误字符串可能写入本机 DSH 日志，应按敏感本地数据管理日志；
-- rc.2 私有兼容写入采用精确指纹、队列内复检、状态冲突检查和写后归档成员关系验证；
+- 发布/安装前契约检查会核对 alpha.2 精确包文件哈希；运行时私有写入另采用原型自有 getter/方法指纹、队列内复检、未完成持久化标记检查、状态冲突检查和写后归档成员关系验证；
 - 宿主提供的 `unarchiveSession()` 属于受信任宿主边界；插件会验证目标 ID 已移出归档集合，但不会审计该方法造成的其他宿主状态变化；
 - 请求体有 8192 字节上限，但插件不单独设置读取超时，连接超时依赖 Host Web Server；
 - 不修改 DSH Runtime checkout，不操作 Web Shell 文件，不删除会话日志。

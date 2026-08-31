@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  compatibilityMethodHashes,
   createArchiveManager,
   createListHandler,
   createRestoreHandler,
@@ -72,8 +73,16 @@ test('private compatibility mode requires the exact injected fingerprint gate', 
   assert.deepEqual(inspectRestoreCapability(registry, allowCompatibility), {
     canRestore: true,
     mode: 'compatibility',
-    message: '已匹配 DSH 0.1.1-rc.2 的精确实现指纹；恢复操作将与工作区写入串行执行。',
+    message: '已匹配 DSH 0.1.2-alpha.2 的精确实现指纹；恢复操作将与工作区写入串行执行。',
   })
+})
+
+test('method fingerprinting rejects inherited methods and accessor spoofing', () => {
+  const inherited = Object.create({ archiveSession() {} })
+  assert.equal(compatibilityMethodHashes(inherited), null)
+  const accessor = {}
+  Object.defineProperty(accessor, 'archiveSession', { get() { return () => {} } })
+  assert.equal(compatibilityMethodHashes(accessor), null)
 })
 
 test('duplicate archive ids are treated as malformed and never enabled', async () => {
@@ -114,7 +123,7 @@ test('archive manager reads only requested archived observations and returns own
 
 test('compatibility restore serializes and preserves every unrelated state field', async () => {
   const registry = makeRegistry()
-  registry.state.pendingMutation = { operation: 'create', workspaceId: 'pending' }
+  registry.state.futureField = { preserved: true }
   const result = await managerFor(registry).restore('s-new')
   assert.equal(result.restored, true)
   assert.equal(registry.writes, 1)
@@ -123,9 +132,16 @@ test('compatibility restore serializes and preserves every unrelated state field
     initialized: true,
     workspaceIds: ['w1'],
     archivedSessionIds: ['s-old'],
-    pendingMutation: { operation: 'create', workspaceId: 'pending' },
+    futureField: { preserved: true },
   })
   assert.deepEqual(result.data.sessions.map((session) => session.id), ['s-old'])
+})
+
+test('compatibility restore rejects a pending workspace mutation after queue recovery', async () => {
+  const registry = makeRegistry()
+  registry.state.pendingMutation = { operation: 'create', workspaceId: 'pending' }
+  await assert.rejects(managerFor(registry).restore('s-new'), (error) => error.code === 'restore-state-conflict')
+  assert.equal(registry.writes, 0)
 })
 
 test('compatibility restore rejects a projection conflict without writing', async () => {
